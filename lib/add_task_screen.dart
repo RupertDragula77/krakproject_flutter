@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'task_repository.dart';
+import 'services/analytics_service.dart';
+import 'main.dart'; // Task
 
 class AddTaskScreen extends StatefulWidget {
   const AddTaskScreen({super.key});
@@ -12,17 +13,18 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   final titleController = TextEditingController();
   String priority = "średni";
 
-  void save() {
-    TaskRepository.tasks.add(
-      Task(
-        id: DateTime.now().millisecondsSinceEpoch,
-        title: titleController.text,
-        deadline: "brak",
-        priority: priority,
-      ),
+  void save() async {
+    final newTask = Task(
+      id: DateTime.now().millisecondsSinceEpoch,
+      title: titleController.text,
+      deadline: "brak",
+      done: false,
+      priority: priority,
     );
 
-    Navigator.pop(context);
+    await AnalyticsService.logTaskAdded();
+
+    Navigator.pop(context, newTask);
   }
 
   @override

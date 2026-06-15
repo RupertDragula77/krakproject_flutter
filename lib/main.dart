@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
-import 'services/task_api_service.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'firebase_options.dart';
+import 'services/task_api_service.dart';
+import 'services/analytics_service.dart'; // za chwilę utworzymy
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  await Hive.initFlutter();
-  await Hive.openBox("tasks");
-
-  runApp(const MyApp());
-}
-
-/// MODEL
+// ------------------- MODEL -------------------
 class Task {
   final int id;
   String title;
@@ -48,7 +43,26 @@ class Task {
   }
 }
 
-/// APP
+// ------------------- MAIN -------------------
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Hive
+  await Hive.initFlutter();
+  await Hive.openBox("tasks");
+
+  // Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Crashlytics – automatyczne raportowanie błędów Fluttera
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+  runApp(const MyApp());
+}
+
+// ------------------- APP -------------------
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -61,7 +75,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// HOME
+// ------------------- HOME SCREEN -------------------
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -93,32 +107,32 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: reload,
-          )
+          ),
         ],
       ),
       body: FutureBuilder<List<Task>>(
         future: tasksFuture,
         builder: (context, snapshot) {
-
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (snapshot.hasError) {
+            // Ręczne raportowanie błędu do Crashlytics
+            FirebaseCrashlytics.instance.recordError(
+              snapshot.error,
+              snapshot.stackTrace,
+              reason: 'Błąd ładowania zadań w HomeScreen',
+            );
             return Center(child: Text("Błąd: ${snapshot.error}"));
           }
-
           final tasks = snapshot.data ?? [];
-
           if (tasks.isEmpty) {
             return const Center(child: Text("Brak zadań"));
           }
-
           return ListView.builder(
             itemCount: tasks.length,
             itemBuilder: (context, index) {
               final task = tasks[index];
-
               return Card(
                 child: ListTile(
                   leading: Icon(
@@ -128,6 +142,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   title: Text(task.title),
                   subtitle: Text("priorytet: ${task.priority}"),
+                  onTap: () async {
+                    // Logujemy otwarcie zadania (Analytics)
+                    await AnalyticsService.logTaskOpened(task.id);
+                    // Tu możesz dodać nawigację do szczegółów/edycji
+                  },
                 ),
               );
             },
